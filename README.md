@@ -89,8 +89,80 @@ The souce of randomness in this TRNG is ambient sound which is recorded by a mic
 digitized. Recording are obtained using the microphone in the system and it has sampling rate of 
 44.1 kHz . Each sample is then stored as 8 bit variables .
 
-In order to remove transient efficec
+In order to remove transient effect the first 1000 samples are discarded. 
+Add offset value 127 to all the values so that number lie in the range of [0,255].<br>
+3 least significant bit from each number is taken.
 
+# Algorithm 
+
+![](algo.png)
+<br>
+
+The CCML states ![](https://latex.codecogs.com/gif.latex?x_%7Bt%7D%5E%7Bi%7D) are represented in 64 bit IEEE double-precision
+binary floating point format.The chaotic states are intialized using the 3bit sample from audio.
+The interval between each perturbation operation is se-
+lected based on the number of rounds required to diffuse the
+bits in one state to all eight states. For L = 8, the number of
+rounds required is 8/2 = 4, therefore perturbation of the
+x it only occurs once every four iterations. The value of x it is
+modified based on the equation : <br>
+
+![](https://latex.codecogs.com/gif.latex?x_%7Bt%7D%5E%7Bi%7D%20%3D%20%28%280.071428571%20%5Ctimes%20r%5E%7By%7D%29%20&plus;%20x_%7Bt%7D%5E%7Bi%7D%20%29%20%5Ctimes%200.666666667) 
+<br>
+where ![](https://latex.codecogs.com/gif.latex?r%5E%7By%7D) is the value of 3-bit random number obtained from the y-th audio sample. This equation chosen such that value of ![](https://latex.codecogs.com/gif.latex?x_%7Bt%7D%5E%7Bi%7D)lis in the range of [0,1].
+The states for the CCML, ![](https://latex.codecogs.com/gif.latex?x_%7Bt%7D%5E%7Bi%7D), i = {0, , 7} are initialized
+with the arbitrary FP values (0.141592, 0.653589, 0.793238,
+0.462643, 0.383279, 0.502884, 0.197169, 0.399375)
+
+Z is an numpy array which stores the value of all final eight states. The value of the Z are used to produce four 64 bit numbers.
+based on : <br>
+
+![](zvalues.png)
+<br>
+
+The swap funciton swaps the 16 most significant bits with the 16 least significant bits.By performing the swap followed by an
+XOR operation, the TRNG makes full use of the entire 64-bit values to produce outputs.
+O is resultant random sequence. 
+```python
+o=[]
+z=[0 for i in range(L)]
+
+x = [[0 for i in range(epoch)] for j in range(L)]
+x[0][0] = 0.141592
+x[1][0] = 0.653589
+x[2][0] = 0.793238
+x[3][0] = 0.462643
+x[4][0]= 0.383279
+x[5][0]= 0.502884
+x[6][0] = 0.197169
+x[7][0] = 0.399375
+t=0
+c=0
+y=0
+while len(o)<= N:
+    t=0
+    
+    for i in range(L):
+        x[i][t]= float(((0.071428571 * (r[c]%8)) +x[i][t]) * 0.666666667)
+        c  = c + 1
+    for t in range (epoch):
+        for i in range(L):
+            x[i][(t+1)%epoch] = (1-cc)*x[i][t] + (cc/2)* (x[(i+1)%L][t]+ x[(i-1)%L][t])                    
+    for i in range(L):
+        z[i]= int(x[i][4]*(10**8) )%(2**64)
+        x[i][0]= x[i][4]
+        
+    for i in range(int(L/2)):
+        k=(z[i+4])
+        swapped_k= ( (k<<(32))   | k>>(32) )
+        z[i]= (z[i] ^ swapped_k)
+        z[i]= (z[i])%(2**64)
+    newnum = ( ( (  z[0] << 64  | z[1] ) << 64 | z[2] ) << 64 | z[3] )
+    o.append(newnum)
+```
+# Statistical Test Results
+The TRNG is evaluated on the DIEHARD test suite. 
+The DIEHARD test suite has 18 statistical tests. 
 
 
 
