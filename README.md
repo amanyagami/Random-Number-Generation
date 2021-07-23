@@ -161,10 +161,25 @@ while len(o)<= N:
     o.append(newnum)
 ```
 # Statistical Test Results
-The TRNG is evaluated on the DIEHARD test suite. 
-The DIEHARD test suite has 18 statistical tests. 
+
+![](DHnames.png)
+<br>
+
+The TRNG is evaluated on the DIEHARD test suite. (yipee ka aye)
+The DIEHARD test suite has 18 statistical tests and the TRNG passed all the tests.
 
 
+![](DH0-3.png)
+<br>
+
+![](DH4-7.png)
+<br>
+
+![](DH8-12.png)
+<br>
+
+![](DH14-19.png)
+<br>
 
 
 
