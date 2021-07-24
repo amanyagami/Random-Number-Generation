@@ -100,8 +100,7 @@ Add offset value 127 to all the values so that number lie in the range of [0,255
 
 The CCML states ![](https://latex.codecogs.com/gif.latex?x_%7Bt%7D%5E%7Bi%7D) are represented in 64 bit IEEE double-precision
 binary floating point format.The chaotic states are intialized using the 3bit sample from audio.
-The interval between each perturbation operation is se-
-lected based on the number of rounds required to diffuse the
+The interval between each perturbation operation is selected based on the number of rounds required to diffuse the
 bits in one state to all eight states. For L = 8, the number of
 rounds required is 8/2 = 4, therefore perturbation of the
 x it only occurs once every four iterations. The value of x it is
@@ -120,7 +119,7 @@ based on : <br>
 ![](zvalues.png)
 <br>
 
-The swap funciton swaps the 16 most significant bits with the 16 least significant bits.By performing the swap followed by an
+The swap funciton swaps the 32 most significant bits with the 32 least significant bits.By performing the swap followed by an
 XOR operation, the TRNG makes full use of the entire 64-bit values to produce outputs.
 O is resultant random sequence. 
 ```python
