@@ -178,3 +178,30 @@ def test_cli_dry_run_reports_time(capsys) -> None:
     assert main(["--count", "100000", "--dry-run"]) == 0
     err = capsys.readouterr().err
     assert "100000 number(s)" in err and "19 min" in err
+
+
+def _lcg_source() -> CallableSource:
+    """Deterministic noise independent of NumPy's random-stream versions."""
+    state = [12345]
+
+    def fn(n: int) -> np.ndarray:
+        out = np.empty(n, dtype=np.int16)
+        x = state[0]
+        for i in range(n):
+            x = (1103515245 * x + 12345) & 0x7FFFFFFF
+            out[i] = (x >> 8) % 201 - 100
+        state[0] = x
+        return out
+
+    return CallableSource(fn)
+
+
+def test_golden_digest_pins_the_pipeline() -> None:
+    """Any change to CCML, mixing or conditioning changes this digest on purpose."""
+    import hashlib
+
+    g = Generator(_lcg_source())
+    h = hashlib.sha256()
+    for _ in range(5):
+        h.update(g.block())
+    assert h.hexdigest() == "5f1ecc0e39d0376bbcbe6ac793eea2cf5ea586ed1ee24953503c6fce1f664670"

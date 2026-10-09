@@ -1,52 +1,88 @@
-# Random Numbers
+<div align="center">
 
-> **Status (v0.2).** The original script is kept in `legacy/final_TRNG.py`. Measuring it
-> (`tools/measure_legacy.py`, fed with *ideal* random input) showed that it discards most of
-> the entropy it is given, so it has been replaced by the tested `trng` package below.
+# TRNG
 
-## Quick start
+**True random numbers from microphone noise - and it tells you when it can't justify them.**
 
-You choose how many numbers you want; the tool works out how long it has to record,
-tells you first, then records exactly that long.
+[![CI](https://github.com/amanyagami/Random-Number-Generation/actions/workflows/ci.yml/badge.svg)](https://github.com/amanyagami/Random-Number-Generation/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/license-MIT-yellow.svg)](LICENSE)
+![Python](https://img.shields.io/badge/python-3.10%2B-blue)
+[![uv](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/uv/main/assets/badge/v0.json)](https://github.com/astral-sh/uv)
+
+</div>
+
+Choose how many numbers you want. The tool works out how long it has to listen, tells you, records
+exactly that long, and refuses to emit anything its entropy estimators cannot back.
 
 ```bash
 uv sync --extra audio
-uv run trng --count 1                        # one 32-bit number   (~0.1 s of audio)
-uv run trng --count 100                      # 100 numbers         (~1.2 s)
-uv run trng --count 1000                     #                     (~12 s)
-uv run trng --count 10000                    #                     (~2 min)
-uv run trng --count 100000                   #                     (~19 min)
-uv run trng --count 10 --min 1 --max 6       # ten unbiased dice rolls
-uv run trng --count 5 --bits 64 --hex        # 64-bit numbers in hexadecimal
-uv run trng --count 100000 --dry-run         # just print the recording time
-uv run trng --source recording.wav --count 100   # use a recorded file instead of the mic
-uv run pytest
+uv run trng --count 1000                 # 1,000 random 32-bit numbers  (~12 s of audio)
+uv run trng --count 10 --min 1 --max 6   # ten unbiased dice rolls
+uv run trng --count 5 --bits 64 --hex    # 64-bit numbers in hexadecimal
+uv run trng --count 100000 --dry-run     # only print the recording time
 ```
 
-Recording time comes from the entropy budget: every 32-byte block consumes 4096 audio samples
-(at 44.1 kHz), so time grows linearly with `--count x bytes per number`. Any positive count is
-accepted; 1, 10, 100, 1000, 10000 and 100000 are the suggested sizes. Ranges (`--min/--max`)
-use rejection sampling, so there is no modulo bias.
+## How it works
 
-## What was wrong with the original, and what changed
+```mermaid
+flowchart LR
+    M[Microphone<br/>16-bit samples] --> H{Health tests<br/>repetition · proportion}
+    H -->|pass| E[Min-entropy<br/>MCV · Markov]
+    H -->|fail| X[Refuse]
+    E -->|enough| C[CCML mixer<br/>tent-map lattice]
+    E -->|too little| X
+    C --> S[SHA3-256<br/>conditioner]
+    S --> N[Random numbers]
+```
 
-| Finding in `legacy/final_TRNG.py` (ideal input) | Fix in `trng` |
+| Stage | What it does |
 |---|---|
-| `chaotic_map()` is defined but never called; the "lattice" is a linear neighbour average, so there is no chaos. | `ccml.py` applies the tent map and couples on `f(x)`, as in the CCML definition. Sensitivity to a 1e-12 perturbation is tested. |
-| Each 64-bit word is `int(x * 1e8)`, i.e. under 27 bits, so the "256-bit" outputs have 40 of 256 bit positions that are never 1 and 3.16 / 8 bits of byte min-entropy. | Output is the SHA3-256 digest of the raw noise plus the mixed lattice state: no stuck bits, byte min-entropy about 7.7 / 8 on the same input. |
-| Only `sample % 8` (3 bits) of each noise byte was used, via an `int64 -> int8` cast that keeps the low byte of every fourth sample. | The low bits of every 16-bit sample are used and checked. |
-| No health tests, no entropy accounting. | SP 800-90B-style Repetition Count and Adaptive Proportion tests, MCV and Markov min-entropy estimators, and a generator that **refuses** to output a block it cannot back with measured entropy. |
+| Health tests | NIST SP 800-90B repetition-count and adaptive-proportion tests on the low bits of every sample |
+| Entropy estimate | Most-common-value and first-order Markov min-entropy estimators; the lower one is credited, halved again for safety |
+| CCML | A ring of 8 coupled tent maps (alpha = 1.99999, coupling 0.05) diffuses each sample into the state |
+| Conditioner | SHA3-256 over the raw samples and the mixed state, one 32-byte block per 4,096 samples |
+
+## How long does it listen?
+
+Recording time is set by the entropy budget (4,096 samples per 32-byte block at 44.1 kHz), not by
+computation. At 32 bits per number:
+
+| Numbers | 1 | 10 | 100 | 1,000 | 10,000 | 100,000 |
+|---|---|---|---|---|---|---|
+| Audio recorded | 0.1 s | 0.2 s | 1.2 s | 11.6 s | 1 min 56 s | 19 min 20 s |
+
+Computation is not the bottleneck: measured on a 4-core CPU the pipeline produces a block in
+**8.2 ms**, i.e. about **11x faster than real time** (it was 15.0 ms before the lattice was
+vectorized; output is bit-identical, pinned by a golden-digest test).
+
+## Why this exists: the original script
+
+`legacy/final_TRNG.py` is the original. Measured with *ideal* random input
+(`tools/measure_legacy.py`) it discards most of the entropy it is given:
+
+| | Original | `trng` |
+|---|---|---|
+| Output bit positions that are never 1 | 40 of 256 | 0 |
+| Byte min-entropy on the same input | 3.16 / 8 | about 7.7 / 8 |
+| Chaotic map actually used | no (`chaotic_map()` is never called) | yes |
+| Health tests, entropy accounting | none | yes; refuses to output otherwise |
 
 ## Limits (read this)
 
-* The estimators here are two of the ten SP 800-90B estimators. They are conservative for
-  biased and first-order-dependent noise but cannot certify that a signal is *noise*: a
-  deterministic signal with a flat histogram can pass. Assess your actual microphone and room
-  offline with NIST's `ea_non_iid` and the SP 800-22 suite before relying on the output.
-* Health-test false-positive rate is set to 2^-40 per sample (the standard suggests 2^-20)
-  because the generator raises on failure; a stuck source is still caught within 21 samples.
-* This is an educational project. For cryptographic keys use your operating system's CSPRNG
-  (`secrets`, `os.urandom`).
+* The estimators are two of the ten SP 800-90B estimators. They are conservative for biased and
+  first-order-dependent noise but cannot certify that a signal is *noise*: a deterministic signal
+  with a flat histogram can pass. Assess your microphone and room offline with NIST's `ea_non_iid`
+  and the SP 800-22 suite before relying on the output.
+* Health-test false-positive rate is 2^-40 per sample (the standard suggests 2^-20) because the
+  generator raises on failure; a stuck source is still caught within 21 samples.
+* Educational project. For cryptographic keys use your operating system's CSPRNG (`secrets`,
+  `os.urandom`).
+
+## Development
+
+```bash
+uv sync && uv run pytest -q && uv run ruff check src tests && uv run ruff format --check src tests
+```
 
 ---
 

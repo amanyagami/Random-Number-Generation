@@ -53,11 +53,14 @@ class CCML:
         self.x = np.asarray(seed, dtype=np.float64).copy()
         if self.x.shape != (size,):
             raise ValueError("seed must have shape (size,)")
+        # Precomputed neighbour indices: ~3x faster than np.roll on such a small ring.
+        self._next = (np.arange(size) + 1) % size
+        self._prev = (np.arange(size) - 1) % size
 
     def step(self) -> np.ndarray:
         """Advance the lattice one time step and return the new state."""
         fx = tent(self.x, self.alpha)
-        self.x = (1.0 - self.eps) * fx + 0.5 * self.eps * (np.roll(fx, -1) + np.roll(fx, 1))
+        self.x = (1.0 - self.eps) * fx + 0.5 * self.eps * (fx[self._next] + fx[self._prev])
         return self.x
 
     def inject(self, symbols: np.ndarray) -> None:
@@ -66,11 +69,14 @@ class CCML:
         Args:
             symbols: Integer noise symbols; element ``j`` perturbs site ``j``.
         """
-        s = np.zeros(self.size)
-        s[: len(symbols)] = (np.asarray(symbols, dtype=np.float64) + 0.5) / 256.0
-        self.x = (self.x + s) % 1.0
+        n = len(symbols)
+        x = self.x.copy() if n < self.size else self.x
+        x[:n] += (np.asarray(symbols, dtype=np.float64) + 0.5) / 256.0
+        x %= 1.0
         # A float tent map can fall onto 0 / a fixed point; keep strictly inside (0, 1).
-        self.x = np.clip(self.x, 1e-9, 1.0 - 1e-9)
+        np.maximum(x, 1e-9, out=x)
+        np.minimum(x, 1.0 - 1e-9, out=x)
+        self.x = x
 
     def mantissa_bytes(self) -> bytes:
         """Return the low 32 mantissa bits of every site (the fastest-decorrelating bits)."""
