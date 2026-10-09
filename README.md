@@ -6,12 +6,27 @@
 
 ## Quick start
 
+You choose how many numbers you want; the tool works out how long it has to record,
+tells you first, then records exactly that long.
+
 ```bash
 uv sync --extra audio
-uv run trng --source mic --bytes 32          # live microphone
-uv run trng --source recording.wav --bytes 32
+uv run trng --count 1                        # one 32-bit number   (~0.1 s of audio)
+uv run trng --count 100                      # 100 numbers         (~1.2 s)
+uv run trng --count 1000                     #                     (~12 s)
+uv run trng --count 10000                    #                     (~2 min)
+uv run trng --count 100000                   #                     (~19 min)
+uv run trng --count 10 --min 1 --max 6       # ten unbiased dice rolls
+uv run trng --count 5 --bits 64 --hex        # 64-bit numbers in hexadecimal
+uv run trng --count 100000 --dry-run         # just print the recording time
+uv run trng --source recording.wav --count 100   # use a recorded file instead of the mic
 uv run pytest
 ```
+
+Recording time comes from the entropy budget: every 32-byte block consumes 4096 audio samples
+(at 44.1 kHz), so time grows linearly with `--count x bytes per number`. Any positive count is
+accepted; 1, 10, 100, 1000, 10000 and 100000 are the suggested sizes. Ranges (`--min/--max`)
+use rejection sampling, so there is no modulo bias.
 
 ## What was wrong with the original, and what changed
 

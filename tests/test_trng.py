@@ -110,8 +110,9 @@ def test_wav_roundtrip_and_cli(tmp_path, capsys) -> None:
         w.setframerate(44100)
         w.writeframes(pcm.tobytes())
     assert len(WavSource(str(path)).read(100)) == 100
-    assert main(["--source", str(path), "--bytes", "40"]) == 0
-    assert len(bytes.fromhex(capsys.readouterr().out.strip())) == 40
+    assert main(["--source", str(path), "--count", "5", "--hex"]) == 0
+    lines = capsys.readouterr().out.split()
+    assert len(lines) == 5 and all(int(v, 16) < 2**32 for v in lines)
 
 
 def test_wav_exhaustion_is_an_error(tmp_path) -> None:
@@ -132,3 +133,47 @@ def test_markov_estimator_flags_predictable_sequences_but_not_noise() -> None:
     assert min_entropy_markov(rng.integers(0, 4, 50_000), k=4) > 1.9
     cycle = np.tile(np.arange(4), 5000)
     assert min_entropy_markov(cycle, k=4) < 0.2
+
+
+def test_plan_scales_with_requested_count() -> None:
+    g = Generator(noise_source(7))
+    p1 = g.plan(1, 32)
+    assert (p1.blocks, p1.samples) == (1, 4096)
+    assert p1.seconds == pytest.approx(4096 / 44100)
+    # 100000 x 32-bit numbers = 400000 bytes = 12500 blocks of 32 bytes
+    p = g.plan(100_000, 32)
+    assert p.blocks == 12_500
+    assert p.seconds == pytest.approx(12_500 * 4096 / 44100)
+    for count in (1, 10, 100, 1000, 10000, 100000):
+        assert g.plan(count).blocks >= 1
+    with pytest.raises(ValueError):
+        g.plan(0)
+
+
+def test_integers_are_in_range_and_unbiased() -> None:
+    g = Generator(noise_source(8))
+    rolls = g.integers(6000, 1, 6)
+    counts = np.bincount(rolls, minlength=7)[1:]
+    assert set(rolls) <= {1, 2, 3, 4, 5, 6}
+    assert counts.min() > 850 and counts.max() < 1150  # ~1000 each, >6 sigma margin
+    assert g.integers(3, 5, 5) == [5, 5, 5]
+    with pytest.raises(ValueError):
+        g.integers(1, 3, 2)
+
+
+def test_read_keeps_leftover_bytes_and_actual_use_matches_plan() -> None:
+    g = Generator(noise_source(9))
+    plan = g.plan(10, 32)  # 40 bytes -> 2 blocks of 32 bytes
+    done: list[int] = []
+    g.on_block = done.append
+    assert len(g.integers(10, 0, 2**32 - 1)) == 10
+    assert len(done) == plan.blocks == 2
+    g.read(4)  # 64 - 40 = 24 bytes are left in the pool
+    assert len(done) == 2
+    assert g.plan(6, 32).blocks == 0  # 24 bytes already recorded cover 6 numbers
+
+
+def test_cli_dry_run_reports_time(capsys) -> None:
+    assert main(["--count", "100000", "--dry-run"]) == 0
+    err = capsys.readouterr().err
+    assert "100000 number(s)" in err and "19 min" in err
