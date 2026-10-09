@@ -1,0 +1,37 @@
+[project]
+name = "trng"
+version = "0.2.0"
+description = "Microphone-noise true random number generator with a coupled chaotic map lattice mixer, SHA-3 conditioning and SP 800-90B-style health tests."
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = ["numpy>=1.26"]
+
+[project.optional-dependencies]
+audio = ["sounddevice>=0.4.6"]
+
+[project.scripts]
+trng = "trng.__main__:main"
+
+[dependency-groups]
+dev = ["pytest>=8", "ruff>=0.6"]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/trng"]
+
+[tool.ruff]
+line-length = 100
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "D"]
+ignore = ["D203", "D213", "D107"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["D"]
+
+[tool.ruff.lint.pydocstyle]
+convention = "google"

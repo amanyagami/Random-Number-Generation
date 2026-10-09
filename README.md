@@ -1,4 +1,42 @@
-# Random Numbers 
+# Random Numbers
+
+> **Status (v0.2).** The original script is kept in `legacy/final_TRNG.py`. Measuring it
+> (`tools/measure_legacy.py`, fed with *ideal* random input) showed that it discards most of
+> the entropy it is given, so it has been replaced by the tested `trng` package below.
+
+## Quick start
+
+```bash
+uv sync --extra audio
+uv run trng --source mic --bytes 32          # live microphone
+uv run trng --source recording.wav --bytes 32
+uv run pytest
+```
+
+## What was wrong with the original, and what changed
+
+| Finding in `legacy/final_TRNG.py` (ideal input) | Fix in `trng` |
+|---|---|
+| `chaotic_map()` is defined but never called; the "lattice" is a linear neighbour average, so there is no chaos. | `ccml.py` applies the tent map and couples on `f(x)`, as in the CCML definition. Sensitivity to a 1e-12 perturbation is tested. |
+| Each 64-bit word is `int(x * 1e8)`, i.e. under 27 bits, so the "256-bit" outputs have 40 of 256 bit positions that are never 1 and 3.16 / 8 bits of byte min-entropy. | Output is the SHA3-256 digest of the raw noise plus the mixed lattice state: no stuck bits, byte min-entropy about 7.7 / 8 on the same input. |
+| Only `sample % 8` (3 bits) of each noise byte was used, via an `int64 -> int8` cast that keeps the low byte of every fourth sample. | The low bits of every 16-bit sample are used and checked. |
+| No health tests, no entropy accounting. | SP 800-90B-style Repetition Count and Adaptive Proportion tests, MCV and Markov min-entropy estimators, and a generator that **refuses** to output a block it cannot back with measured entropy. |
+
+## Limits (read this)
+
+* The estimators here are two of the ten SP 800-90B estimators. They are conservative for
+  biased and first-order-dependent noise but cannot certify that a signal is *noise*: a
+  deterministic signal with a flat histogram can pass. Assess your actual microphone and room
+  offline with NIST's `ea_non_iid` and the SP 800-22 suite before relying on the output.
+* Health-test false-positive rate is set to 2^-40 per sample (the standard suggests 2^-20)
+  because the generator raises on failure; a stuck source is still caught within 21 samples.
+* This is an educational project. For cryptographic keys use your operating system's CSPRNG
+  (`secrets`, `os.urandom`).
+
+---
+
+# Background
+
 There is always a high demand for random numbers for different uses 
 like gambling , cryptography, encryption and many more.
 There are many process which are random in their true nature for example rolling a die or tossing
