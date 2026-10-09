@@ -84,6 +84,10 @@ vectorized; output is bit-identical, pinned by a golden-digest test).
 uv sync && uv run pytest -q && uv run ruff check src tests && uv run ruff format --check src tests
 ```
 
+## License
+
+[MIT](LICENSE)
+
 ---
 
 # Background
@@ -131,7 +135,7 @@ moves from 0 to 2 the chaotic map changes from periodic to aperiodic as shown by
 Lyapunov exponent of the chaotic temp map. Lyapunov exponent indicates chaotic behavoir in the 
 region where it is positive.
 <br>
-![](a.png)
+![](docs/images/a.png)
 
 <br> 
 The code below shows the Chaotic map used in this TRNG
@@ -166,10 +170,10 @@ of floor(L/2) iterations are required, where the floor(y) function
 rounds y downwards and returns the largest integral value that
 is not greater than y. Examples for L = 7 and L = 8 are
 
-![](b.png)
+![](docs/images/b.png)
 <br>
 
-![](c.png)
+![](docs/images/c.png)
 <br>
 
 
@@ -184,7 +188,7 @@ Add offset value 127 to all the values so that number lie in the range of [0,255
 
 # Algorithm 
 
-![](algo.png)
+![](docs/images/algo.png)
 <br>
 
 The CCML states ![](https://latex.codecogs.com/gif.latex?x_%7Bt%7D%5E%7Bi%7D) are represented in 64 bit IEEE double-precision
@@ -205,7 +209,7 @@ with the arbitrary FP values (0.141592, 0.653589, 0.793238,
 Z is an numpy array which stores the value of all final eight states. The value of the Z are used to produce four 64 bit numbers.
 based on : <br>
 
-![](zvalues.png)
+![](docs/images/zvalues.png)
 <br>
 
 The swap funciton swaps the 32 most significant bits with the 32 least significant bits.By performing the swap followed by an
@@ -250,7 +254,7 @@ while len(o)<= N:
 ```
 # Statistical Test Results
 
-![](DHnames.png)
+![](docs/images/DHnames.png)
 <br>
 
 The TRNG is evaluated on the DIEHARD test suite. (yipee ka aye)
@@ -279,16 +283,16 @@ The DIEHARD test suite has 18 statistical tests and the TRNG passed all the test
 <br>
 
 WEAK - indicates the value is very close to 0.01 or 0.99 ,but still passed the test.
-![](DH0-3.png)
+![](docs/images/DH0-3.png)
 <br>
 
-![](DH4-7.png)
+![](docs/images/DH4-7.png)
 <br>
 
-![](DH8-12.png)
+![](docs/images/DH8-12.png)
 <br>
 
-![](DH14-19.png)
+![](docs/images/DH14-19.png)
 <br>
 
 # CODE 
