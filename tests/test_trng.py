@@ -168,9 +168,10 @@ def test_read_keeps_leftover_bytes_and_actual_use_matches_plan() -> None:
     g.on_block = done.append
     assert len(g.integers(10, 0, 2**32 - 1)) == 10
     assert len(done) == plan.blocks == 2
-    g.read(4)  # 64 - 40 = 24 bytes are left in the pool
+    g.read(4)  # 64 - 40 - 4 = 20 bytes are left in the pool
     assert len(done) == 2
-    assert g.plan(6, 32).blocks == 0  # 24 bytes already recorded cover 6 numbers
+    assert g.plan(5, 32).blocks == 0  # 20 bytes already recorded cover 5 numbers
+    assert g.plan(6, 32).blocks == 1
 
 
 def test_cli_dry_run_reports_time(capsys) -> None:
